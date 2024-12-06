@@ -1,4 +1,4 @@
-{% set name = "PythonTemplate" %}
+{% set name = "BiGER" %}
 {% set version = "0.0.1" %}
 
 package:
@@ -30,15 +30,17 @@ test:
     - coverage
     - pytest-mock
   imports:
-    - PythonTemplate
+    - BiGER
+    - numpy >= 1.21
+    - scipy
     
 
 about:
-  home: https://github.com/kevin931/PythonTemplate
-  license: CC0
-  license_family: CC0
-  license_file: LICENSE.txt
-  summary: CyTOF Dimension Reduction Framework.
+  home: https://github.com/kevin931/BiGER-py
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE
+  summary: A Python implementation of BiGER for Bayesian Aggregation in Genomics with Extended Ranking Schemes.
 
 extra:
   recipe-maintainers:
