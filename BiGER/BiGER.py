@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import truncnorm, gamma, norm
+from scipy.stats import truncnorm
 from copy import deepcopy
 
 from numpy.typing import NDArray
@@ -31,6 +31,7 @@ def _get_unranked_index(r: NDArray[np.int64],
         else:
             unranked_index.append(np.array([], dtype=np.int64))
     return unranked_index
+
 
 def _get_bottom_index(r: NDArray[np.int64],
                       n_ranked: NDArray[np.int64],
@@ -138,9 +139,9 @@ def _update_w(n_lists, n_ranked, n_unranked, non_na_col, ranked_index, unranked_
                                             loc = m_mu[j],
                                                 scale = np.sqrt(1/e_sigma2_inv[s]))
                 e_w2[j,s] = truncnorm.moment(2,
-                                                a = (lower-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
-                                                b = (upper-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
-                                                loc = m_mu[j], scale = np.sqrt(1/e_sigma2_inv[s]))
+                                             a = (lower-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
+                                             b = (upper-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
+                                             loc = m_mu[j], scale = np.sqrt(1/e_sigma2_inv[s]))
                 
         
         # Bottom Ties
@@ -162,23 +163,52 @@ def _update_w(n_lists, n_ranked, n_unranked, non_na_col, ranked_index, unranked_
                                             loc = m_mu[j],
                                             scale = np.sqrt(1/e_sigma2_inv[s]))
                 e_w2[j,s] = truncnorm.moment(2,
-                                                a = (lower-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
-                                                b = (upper-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
-                                                loc = m_mu[j],
-                                                scale = np.sqrt(1/e_sigma2_inv[s]))
+                                             a = (lower-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
+                                             b = (upper-m_mu[j])/np.sqrt(1/e_sigma2_inv[s]),
+                                             loc = m_mu[j],
+                                             scale = np.sqrt(1/e_sigma2_inv[s]))
                     
     return e_w, e_w2
 
 
-def BiGER_VI(r: NDArray[np.int64],
-             n_ranked: NDArray[np.int64],
-             n_unranked: NDArray[np.int64],
-             max_iter: int,
-             alpha: float,
-             beta: float,
-             e_w0: NDArray[np.float64],
-             e_w20: NDArray[np.float64],
-             e_sigma2_inv0: NDArray[np.float64]):
+def BiGER(r: NDArray[np.int64],
+          n_ranked: NDArray[np.int64],
+          n_unranked: NDArray[np.int64],
+          max_iter: int,
+          alpha: float,
+          beta: float,
+          e_w: NDArray[np.float64],
+          e_w2: NDArray[np.float64],
+          e_sigma2_inv: NDArray[np.float64]):
+    
+    """Run the BiGER algorithm.
+
+    This is the BiGER algorithm using Variational Inference. The official implementation
+    is done in R, and this function is a port with native Python implementations. 
+    
+    :param r: A integer rank matrix with rows as genes and columns as studies. All
+    ties are parametrized as ties with the `min` method (i.e. If there are three genes
+    and the top two are tied, the vector is `[1, 1, 3]`).
+    :type r: NDArray[np.int64]
+    :param n_ranked: An integer vector of length J containing the number of ranked items in each gene list.
+    :type n_ranked: NDArray[np.int64]
+    :param n_unranked: An integer vector of length J containing the number of unranked items in each gene list.
+    :type n_unranked: NDArray[np.int64]
+    :param max_iter: The maximum number of VI iterations to run.
+    :type max_iter: int 
+    :param alpha: The :math:`\alpha` (shape) parameter for the Inverse Gamma prior distribution.
+    :type alpha: float
+    :param beta: The :math:`\beta` (rate) parameter for the Inverse Gamma prior distribution.
+    :type beta: float
+    :param e_w: The initialization for the latent weights' expectation, a G by J matrix.
+    :type e_w: NDArray[np.float64]
+    :param e_w2: The initialization for the expectation of the squared latent weights, a G by J matrix.
+    :type e_w2: NDArray[np.float64]
+    :param e_sigma2_inv: The initialization for the expectation of the inverse of study variance (precision), a J by 1 matrix.
+    :type e_sigma2_inv: NDArray[np.float64]
+    :return: _description_
+    :rtype: tuple[NDArray[np.float64], NDArray[np.float64]]
+    """
     
     # Initializations
     n_items: int = r.shape[0]
@@ -189,13 +219,6 @@ def BiGER_VI(r: NDArray[np.int64],
     s2_mu: NDArray[np.float64] = np.empty(n_items, dtype=np.float64)
     a: NDArray[np.float64] = np.empty(n_items, dtype=np.float64)
     b: NDArray[np.float64] = np.empty(n_items, dtype=np.float64)
-    e_w: NDArray[np.float64] = np.empty((n_items,n_lists), dtype=np.float64)
-    e_w2: NDArray[np.float64] = np.empty((n_items,n_lists), dtype=np.float64)
-    e_sigma2_inv: NDArray[np.float64] = np.empty(n_lists, dtype=np.float64)
-    
-    e_w = e_w0
-    e_w2 = e_w20
-    e_sigma2_inv = e_sigma2_inv0
     
     # Get Indices
     ranked_index = _get_ranked_index(r, n_ranked)
@@ -210,10 +233,10 @@ def BiGER_VI(r: NDArray[np.int64],
         if iter % 10 == 0:
             print(iter)
         
-        # Update mu        
+        # Update mu
         m_mu1, s2_mu = _update_mu(n_items, non_na_row, m_mu1, s2_mu, e_sigma2_inv, e_w)
         if iter > 0:
-                convergence[iter-1] = np.mean(m_mu1-m_mu)
+            convergence[iter-1] = np.mean(m_mu1-m_mu)
         m_mu = deepcopy(m_mu1)
         
         # Update sigma
